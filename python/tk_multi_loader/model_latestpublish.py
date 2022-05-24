@@ -161,6 +161,10 @@ class SgLatestPublishModel(ShotgunModel):
                         sg_filters = [
                             ["version", "is", {"type": "Version", "id": sg_data["id"]}]
                         ]
+                    elif sg_data.get("type") == "CustomEntity27":
+                        sg_filters = [
+                            ["sg_multi_publish", "is", {"type": "CustomEntity27", "id": sg_data["id"]}]
+                        ]
                     else:
                         sg_filters = [
                             [

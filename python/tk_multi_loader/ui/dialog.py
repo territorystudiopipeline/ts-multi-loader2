@@ -11,7 +11,7 @@ from sgtk.platform.qt import QtCore, QtGui
 class Ui_Dialog(object):
     def setupUi(self, Dialog):
         Dialog.setObjectName("Dialog")
-        Dialog.resize(1226, 782)
+        Dialog.resize(1426, 782)
         self.horizontalLayout_3 = QtGui.QHBoxLayout(Dialog)
         self.horizontalLayout_3.setObjectName("horizontalLayout_3")
         self.left_area = QtGui.QVBoxLayout()
@@ -97,7 +97,8 @@ class Ui_Dialog(object):
         self.top_toolbar.addWidget(self.label)
         self.left_area.addLayout(self.top_toolbar)
         self.entity_preset_tabs = QtGui.QTabWidget(Dialog)
-        self.entity_preset_tabs.setMaximumSize(QtCore.QSize(300, 16777202))
+        self.entity_preset_tabs.setMaximumSize(QtCore.QSize(600, 16777202))
+        self.entity_preset_tabs.setMinimumSize(QtCore.QSize(600, 0))
         self.entity_preset_tabs.setUsesScrollButtons(True)
         self.entity_preset_tabs.setObjectName("entity_preset_tabs")
         self.left_area.addWidget(self.entity_preset_tabs)
