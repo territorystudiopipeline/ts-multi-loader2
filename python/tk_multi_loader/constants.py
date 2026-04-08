@@ -32,6 +32,7 @@ PUBLISHED_FILES_FIELDS = [
     "version",  # note: not supported on TankPublishedFile so always None
     "version.Version.sg_status_list",
     "created_by.HumanUser.image",
+    "sg_publish_group",
 ]
 
 # left hand side tree view search only kicks in
