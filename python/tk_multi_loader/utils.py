@@ -325,6 +325,55 @@ def resolve_filters(filters):
                     field = app.context.task
                 elif field == "{context.user}":
                     field = app.context.user
+                elif field == "{context.related_entities}":
+                    field = _get_related_entities(app)
                 resolved_filter.append(field)
         resolved_filters.append(resolved_filter)
     return resolved_filters
+
+
+def _append_entities(related, value):
+    """Append a single entity or extend a list of entities."""
+    if not value:
+        return
+    if isinstance(value, list):
+        related.extend(value)
+    else:
+        related.append(value)
+
+def _get_related_entities(app):
+    context = app.context
+    sg = app.shotgun
+
+    if not context.entity:
+        return []
+
+    entity_type = context.entity["type"]
+    entity_id = context.entity["id"]
+
+    related = [context.entity]
+
+    if entity_type == "Shot":
+        shot = sg.find_one(
+            "Shot",
+            [["id", "is", entity_id]],
+            ["sg_sequence", "assets", "custom_entity04_sg_shots_custom_entity04s"]
+        )
+        if shot:
+            _append_entities(related, shot.get("sg_sequence"))
+            _append_entities(related, shot.get("assets"))
+            _append_entities(related, shot.get("custom_entity04_sg_shots_custom_entity04s"))
+
+    elif entity_type == "Asset":
+        asset = sg.find_one("Asset", [["id", "is", entity_id]], ["sg_asset_group"])
+        if asset:
+            _append_entities(related, asset.get("sg_asset_group"))
+
+    elif entity_type == "Sequence":
+        sequence = sg.find_one("Sequence", [["id", "is", entity_id]], ["assets", "sg_master_assets"])
+        if sequence:
+            _append_entities(related, sequence.get("assets"))
+            _append_entities(related, sequence.get("sg_master_assets"))
+
+    app.logger.info("Related entities for context:" % related)
+    return related
