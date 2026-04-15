@@ -341,6 +341,45 @@ def _append_entities(related, value):
     else:
         related.append(value)
 
+
+def _fetch_indirect_links(sg, entity_type, entity_id):
+    """
+    For Sequence and CustomEntity04 entities, fetch their own linked entities
+    and return them as indirect relations.
+    """
+    SEQUENCE_INDIRECT_FIELDS = ["sg_linked_shots", "sg_linked_assets", "sg_linked_master_assets"]
+    MASTER_ASSET_INDIRECT_FIELDS = ["sg_linked_shots", "sg_linked_assets", "sg_linked_sequences"]
+
+    indirect = []
+
+    if entity_type == "Sequence":
+        seq = sg.find_one("Sequence", [["id", "is", entity_id]], SEQUENCE_INDIRECT_FIELDS)
+        if seq:
+            for field in SEQUENCE_INDIRECT_FIELDS:
+                _append_entities(indirect, seq.get(field))
+
+    elif entity_type == "CustomEntity04":
+        master = sg.find_one("CustomEntity04", [["id", "is", entity_id]], MASTER_ASSET_INDIRECT_FIELDS)
+        if master:
+            for field in MASTER_ASSET_INDIRECT_FIELDS:
+                _append_entities(indirect, master.get(field))
+
+    return indirect
+
+
+def _resolve_indirect_links(sg, entities):
+    """
+    Given a list of entities, check if any are Sequence or CustomEntity04
+    and if so, fetch their linked entities too.
+    """
+    indirect = []
+    for entity in entities:
+        if not entity:
+            continue
+        _append_entities(indirect, _fetch_indirect_links(sg, entity["type"], entity["id"]))
+    return indirect
+
+
 def _get_related_entities(app):
     context = app.context
     sg = app.shotgun
@@ -351,36 +390,25 @@ def _get_related_entities(app):
     entity_type = context.entity["type"]
     entity_id = context.entity["id"]
 
-    related = [context.entity]
     entity_list = ["sg_linked_sequences", "sg_linked_shots", "sg_linked_assets", "sg_linked_master_assets"]
+
+    related = [context.entity]
     
     if entity_type == "Shot":
-        shot = sg.find_one(
-            "Shot",
-            [["id", "is", entity_id]],
-            entity_list
-        )
-        if shot:
-            for linked_entity in entity_list:
-                _append_entities(related, shot.get(linked_entity))
-
+        entity_list.append("sg_sequence")
     elif entity_type == "Asset":
-        asset = sg.find_one("Asset", [["id", "is", entity_id]], entity_list)
-        if asset:
-            for linked_entity in entity_list:
-                _append_entities(related, asset.get(linked_entity))
-                
-    elif entity_type == "Sequence":
-        sequence = sg.find_one("Sequence", [["id", "is", entity_id]], entity_list)
-        if sequence:
-            for linked_entity in entity_list:
-                _append_entities(related, sequence.get(linked_entity))
-    
-    elif entity_type == "CustomEntity04":
-        custom_entity = sg.find_one("CustomEntity04", [["id", "is", entity_id]], entity_list)
-        if custom_entity:
-            for linked_entity in entity_list:
-                _append_entities(related, custom_entity.get(linked_entity))
-    
+        entity_list.append("sg_asset_group")
+        
+    current = sg.find_one(entity_type, [["id", "is", entity_id]], entity_list)
+    if current:
+        direct_entities = []
+        for field in entity_list:
+            _append_entities(direct_entities, current.get(field))
+
+        _append_entities(related, direct_entities)
+
+        indirect_entities = _resolve_indirect_links(sg, direct_entities)
+        _append_entities(related, indirect_entities)
+
     app.logger.info("Related entities for context: %s" % related)
     return related
