@@ -357,23 +357,25 @@ def _get_related_entities(app):
         shot = sg.find_one(
             "Shot",
             [["id", "is", entity_id]],
-            ["sg_sequence", "assets", "custom_entity04_sg_shots_custom_entity04s"]
+            ["sg_linked_sequences", "sg_linked_assets", "sg_linked_master_assets"]
         )
         if shot:
-            _append_entities(related, shot.get("sg_sequence"))
-            _append_entities(related, shot.get("assets"))
-            _append_entities(related, shot.get("custom_entity04_sg_shots_custom_entity04s"))
+            _append_entities(related, shot.get("sg_linked_sequences"))
+            _append_entities(related, shot.get("sg_linked_assets"))
+            _append_entities(related, shot.get("sg_linked_master_assets"))
 
     elif entity_type == "Asset":
-        asset = sg.find_one("Asset", [["id", "is", entity_id]], ["sg_asset_group"])
+        asset = sg.find_one("Asset", [["id", "is", entity_id]], ["sg_linked_master_assets", "sg_linked_sequences", "sg_linked_shots"])
         if asset:
-            _append_entities(related, asset.get("sg_asset_group"))
+            _append_entities(related, asset.get("sg_linked_master_assets"))
+            _append_entities(related, asset.get("sg_linked_shots"))
+            _append_entities(related, asset.get("sg_linked_sequences"))
 
     elif entity_type == "Sequence":
-        sequence = sg.find_one("Sequence", [["id", "is", entity_id]], ["assets", "sg_master_assets"])
+        sequence = sg.find_one("Sequence", [["id", "is", entity_id]], ["sg_linked_assets", "sg_linked_master_assets"])
         if sequence:
-            _append_entities(related, sequence.get("assets"))
-            _append_entities(related, sequence.get("sg_master_assets"))
+            _append_entities(related, sequence.get("sg_linked_assets"))
+            _append_entities(related, sequence.get("sg_linked_master_assets"))
 
-    app.logger.info("Related entities for context:" % related)
+    app.logger.info("Related entities for context: %s" % related)
     return related
