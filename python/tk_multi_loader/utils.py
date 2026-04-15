@@ -352,30 +352,35 @@ def _get_related_entities(app):
     entity_id = context.entity["id"]
 
     related = [context.entity]
-
+    entity_list = ["sg_linked_sequences", "sg_linked_shots", "sg_linked_assets", "sg_linked_master_assets"]
+    
     if entity_type == "Shot":
         shot = sg.find_one(
             "Shot",
             [["id", "is", entity_id]],
-            ["sg_linked_sequences", "sg_linked_assets", "sg_linked_master_assets"]
+            entity_list
         )
         if shot:
-            _append_entities(related, shot.get("sg_linked_sequences"))
-            _append_entities(related, shot.get("sg_linked_assets"))
-            _append_entities(related, shot.get("sg_linked_master_assets"))
+            for linked_entity in entity_list:
+                _append_entities(related, shot.get(linked_entity))
 
     elif entity_type == "Asset":
-        asset = sg.find_one("Asset", [["id", "is", entity_id]], ["sg_linked_master_assets", "sg_linked_sequences", "sg_linked_shots"])
+        asset = sg.find_one("Asset", [["id", "is", entity_id]], entity_list)
         if asset:
-            _append_entities(related, asset.get("sg_linked_master_assets"))
-            _append_entities(related, asset.get("sg_linked_shots"))
-            _append_entities(related, asset.get("sg_linked_sequences"))
-
+            for linked_entity in entity_list:
+                _append_entities(related, asset.get(linked_entity))
+                
     elif entity_type == "Sequence":
-        sequence = sg.find_one("Sequence", [["id", "is", entity_id]], ["sg_linked_assets", "sg_linked_master_assets"])
+        sequence = sg.find_one("Sequence", [["id", "is", entity_id]], entity_list)
         if sequence:
-            _append_entities(related, sequence.get("sg_linked_assets"))
-            _append_entities(related, sequence.get("sg_linked_master_assets"))
-
+            for linked_entity in entity_list:
+                _append_entities(related, sequence.get(linked_entity))
+    
+    elif entity_type == "CustomEntity04":
+        custom_entity = sg.find_one("CustomEntity04", [["id", "is", entity_id]], entity_list)
+        if custom_entity:
+            for linked_entity in entity_list:
+                _append_entities(related, custom_entity.get(linked_entity))
+    
     app.logger.info("Related entities for context: %s" % related)
     return related
