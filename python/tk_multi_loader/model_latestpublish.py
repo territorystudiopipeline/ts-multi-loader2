@@ -31,7 +31,8 @@ class SgLatestPublishModel(ShotgunModel):
 
     All images returned by this model will be 512x400 pixels.
     """
-
+    
+    IS_DIRECT_ROLE = QtCore.Qt.UserRole + 106
     TYPE_ID_ROLE = QtCore.Qt.UserRole + 101
     IS_FOLDER_ROLE = QtCore.Qt.UserRole + 102
     ASSOCIATED_TREE_VIEW_ITEM_ROLE = QtCore.Qt.UserRole + 103
@@ -398,7 +399,7 @@ class SgLatestPublishModel(ShotgunModel):
 
         # indicate that shotgun data is NOT folder data
         item.setData(False, SgLatestPublishModel.IS_FOLDER_ROLE)
-
+        item.setData(sg_data.get("_is_direct", False), SgLatestPublishModel.IS_DIRECT_ROLE)
         # start figuring out the searchable tokens for this item
         search_str = ""
 

@@ -261,29 +261,23 @@ def filter_publishes(app, sg_data_list):
         # Constructing a wrapper dictionary so that it's future proof to
         # support returning additional information from the hook
         hook_publish_list = [{"sg_publish": sg_data} for sg_data in sg_data_list]
-
-        hook_publish_list = app.execute_hook(
-            "filter_publishes_hook", publishes=hook_publish_list
-        )
-        if not isinstance(hook_publish_list, list):
-            app.log_error(
-                "hook_filter_publishes returned an unexpected result type \
-                '%s' - ignoring!"
-                % type(hook_publish_list).__name__
-            )
-            hook_publish_list = []
-
-        # split back out publishes:
-        sg_data_list = []
-        for item in hook_publish_list:
-            sg_data = item.get("sg_publish")
-            if sg_data:
-                sg_data_list.append(sg_data)
-
+        hook_publish_list = app.execute_hook("filter_publishes_hook", publishes=hook_publish_list)
+        sg_data_list = [item["sg_publish"] for item in hook_publish_list if item.get("sg_publish")]
     except:
         app.log_exception("Failed to execute 'filter_publishes_hook'!")
-        sg_data_list = []
 
+    related = _get_related_entities(app)
+    direct_lookup = {
+        (ent["type"], ent["id"]): ent.get("_is_direct", False)
+        for ent in related
+    }
+
+    for sg_data in sg_data_list:
+        entity = sg_data.get("entity")
+        if entity:
+            is_direct = direct_lookup.get((entity["type"], entity["id"]))
+            if is_direct is not None:
+                sg_data["_is_direct"] = is_direct  
     return sg_data_list
 
 
@@ -392,23 +386,44 @@ def _get_related_entities(app):
 
     entity_list = ["sg_linked_sequences", "sg_linked_shots", "sg_linked_assets", "sg_linked_master_assets"]
 
-    related = [context.entity]
-    
+    related_dict = {}
+
+    def _add_entity(entity, is_direct, source_field, source_entity=None):
+        if entity and isinstance(entity, dict) and "type" in entity and "id" in entity:
+            key = (entity["type"], entity["id"])
+            if key not in related_dict:
+                related_dict[key] = {
+                    **entity,
+                    "_is_direct": is_direct,
+                    "_source_field": source_field,
+                    "_source_entity": source_entity,
+                }
+
     if entity_type == "Shot":
         entity_list.append("sg_sequence")
     elif entity_type == "Asset":
         entity_list.append("sg_asset_group")
-        
+
+    _add_entity(context.entity, is_direct=True, source_field="context.entity", source_entity=None)
+
     current = sg.find_one(entity_type, [["id", "is", entity_id]], entity_list)
     if current:
         direct_entities = []
         for field in entity_list:
-            _append_entities(direct_entities, current.get(field))
+            value = current.get(field)
+            if value:
+                entities = value if isinstance(value, list) else [value]
+                for entity in entities:
+                    _add_entity(entity, is_direct=True, source_field=field, source_entity=context.entity)
+                    direct_entities.append(entity)
 
-        _append_entities(related, direct_entities)
+        for source in direct_entities:
+            if not source:
+                continue
+            indirect = _fetch_indirect_links(sg, source["type"], source["id"])
+            for entity in indirect:
+                _add_entity(entity, is_direct=False, source_field=None, source_entity=source)
 
-        indirect_entities = _resolve_indirect_links(sg, direct_entities)
-        _append_entities(related, indirect_entities)
-
-    app.logger.info("Related entities for context: %s" % related)
-    return related
+    import pprint
+    app.logger.info("Related entities:\n%s" % pprint.pformat(related_dict))
+    return list(related_dict.values())

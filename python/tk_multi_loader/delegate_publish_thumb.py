@@ -239,7 +239,15 @@ class SgPublishThumbDelegate(PublishDelegate):
 
         widget.set_text(header_text, details_text)
 
-    def sizeHint(self, style_options, model_index):
+        # Check if this publish is direct
+        is_direct = model_index.data(SgLatestPublishModel.IS_DIRECT_ROLE)
+        if is_direct:
+            # Make the text green
+            widget.ui.label.setStyleSheet("") 
+        else:
+            widget.ui.label.setStyleSheet("color: #CFC71F;")
+
+def sizeHint(self, style_options, model_index):
         """
         Specify the size of the item.
 
