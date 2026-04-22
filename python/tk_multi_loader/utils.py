@@ -10,7 +10,7 @@
 
 import sgtk
 from sgtk.platform.qt import QtCore, QtGui
-
+import pprint
 
 class ResizeEventFilter(QtCore.QObject):
     """
@@ -424,6 +424,5 @@ def _get_related_entities(app):
             for entity in indirect:
                 _add_entity(entity, is_direct=False, source_field=None, source_entity=source)
 
-    import pprint
     app.logger.info("Related entities:\n%s" % pprint.pformat(related_dict))
     return list(related_dict.values())
