@@ -17,6 +17,7 @@ from .model_hierarchy import SgHierarchyModel
 from .model_entity import SgEntityModel
 from .model_latestpublish import SgLatestPublishModel
 from .model_publishtype import SgPublishTypeModel
+from .model_publish_type_filter import SgPublishTypeFilterModel
 from .model_status import SgStatusModel
 from .proxymodel_latestpublish import SgLatestPublishProxyModel
 from .proxymodel_entity import SgEntityProxyModel
@@ -200,9 +201,20 @@ class AppDialog(QtGui.QWidget):
         )
 
         #################################################
+        # load and initialize ts publish type filter model 
+        self._publish_type_filter_model = SgPublishTypeFilterModel(
+            self, self._settings_manager, self._task_manager
+        )
+        self.ui.publish_type_filter_list.setModel(self._publish_type_filter_model)
+
+        self._publish_type_filter_overlay = ShotgunModelOverlayWidget(
+            self._publish_type_filter_model, self.ui.publish_type_filter_list
+        )
+        
+        #################################################
         # setup publish model
         self._publish_model = SgLatestPublishModel(
-            self, self._publish_type_model, self._task_manager
+            self, self._publish_type_model, self._publish_type_filter_model, self._task_manager
         )
 
         self._publish_main_overlay = ShotgunModelOverlayWidget(
@@ -244,6 +256,10 @@ class AppDialog(QtGui.QWidget):
             self._apply_type_filters_on_publishes
         )
 
+        self._publish_type_filter_model.itemChanged.connect(
+            self._apply_type_filters_on_publishes
+        )
+        
         # if an item in the table is double clicked the default action is run
         self.ui.publish_view.doubleClicked.connect(self._on_publish_double_clicked)
 
@@ -290,6 +306,9 @@ class AppDialog(QtGui.QWidget):
 
         self.ui.check_all.clicked.connect(self._publish_type_model.select_all)
         self.ui.check_none.clicked.connect(self._publish_type_model.select_none)
+
+        self.ui.check_all.clicked.connect(self._publish_type_filter_model.select_all)
+        self.ui.check_none.clicked.connect(self._publish_type_filter_model.select_none)
 
         #################################################
         # thumb scaling
@@ -968,6 +987,13 @@ class AppDialog(QtGui.QWidget):
         show_folders = self._publish_type_model.get_show_folders()
         self._publish_proxy_model.set_filter_by_type_ids(sg_type_ids, show_folders)
 
+        # ts publish type filter 
+        custom_type_ids = self._publish_type_filter_model.get_selected_types()
+        all_count = self._publish_type_filter_model.rowCount() - 1  
+        if len(custom_type_ids) == all_count:
+            self._publish_proxy_model.set_filter_by_sg_publish_type_ids(None)
+        else:
+            self._publish_proxy_model.set_filter_by_sg_publish_type_ids(custom_type_ids)
     ########################################################################################
     # publish view
 
@@ -1134,6 +1160,7 @@ class AppDialog(QtGui.QWidget):
         self._status_model.hard_refresh()
         self._publish_history_model.hard_refresh()
         self._publish_type_model.hard_refresh()
+        self._publish_type_filter_model.hard_refresh()  
         self._publish_model.hard_refresh()
         for p in self._entity_presets:
             self._entity_presets[p].model.hard_refresh()

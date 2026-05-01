@@ -32,6 +32,7 @@ class SgLatestPublishProxyModel(QtGui.QSortFilterProxyModel):
         self._valid_type_ids = None
         self._show_folders = True
         self._search_filter = ""
+        self._valid_sg_publish_type_ids = None
 
     def set_search_query(self, search_filter):
         """
@@ -53,6 +54,14 @@ class SgLatestPublishProxyModel(QtGui.QSortFilterProxyModel):
         self.invalidateFilter()
         self.filter_changed.emit()
 
+    def set_filter_by_sg_publish_type_ids(self, type_ids):
+        """
+        Specify which Publish Type (CustomNonProjectEntity06) IDs to filter via the sg_publish_type field.
+        """
+        self._valid_sg_publish_type_ids = type_ids if type_ids else None
+        self.invalidateFilter()
+        self.filter_changed.emit()
+    
     def filterAcceptsRow(self, source_row, source_parent_idx):
         """
         Overridden from base class.
@@ -61,7 +70,7 @@ class SgLatestPublishProxyModel(QtGui.QSortFilterProxyModel):
         model and see if we should let it pass or not.
         """
 
-        if self._valid_type_ids is None:
+        if self._valid_type_ids is None and self._valid_sg_publish_type_ids is None:
             # accept all!
             return True
 
@@ -93,13 +102,18 @@ class SgLatestPublishProxyModel(QtGui.QSortFilterProxyModel):
         if is_folder:
             return self._show_folders
 
-        # lastly, check out type filter checkboxes
-        sg_type_id = current_item.data(SgLatestPublishModel.TYPE_ID_ROLE)
+        # PublishedFileType filter
+        if self._valid_type_ids is not None:
+            sg_type_id = current_item.data(SgLatestPublishModel.TYPE_ID_ROLE)
+            if sg_type_id is not None and sg_type_id not in self._valid_type_ids:
+                return False
 
-        if sg_type_id is None:
-            # no type. So always show.
-            return True
-        elif sg_type_id in self._valid_type_ids:
-            return True
-        else:
-            return False
+        # sg_publish_type filter 
+        if self._valid_sg_publish_type_ids is not None:
+            sg_publish_type_id = current_item.data(
+                SgLatestPublishModel.SG_PUBLISH_TYPE_ID_ROLE
+            )
+            if sg_publish_type_id not in self._valid_sg_publish_type_ids:
+                return False
+
+        return True

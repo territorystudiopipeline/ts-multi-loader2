@@ -38,12 +38,14 @@ class SgLatestPublishModel(ShotgunModel):
     ASSOCIATED_TREE_VIEW_ITEM_ROLE = QtCore.Qt.UserRole + 103
     PUBLISH_TYPE_NAME_ROLE = QtCore.Qt.UserRole + 104
     SEARCHABLE_NAME = QtCore.Qt.UserRole + 105
+    SG_PUBLISH_TYPE_ID_ROLE = QtCore.Qt.UserRole + 107
 
-    def __init__(self, parent, publish_type_model, bg_task_manager):
+    def __init__(self, parent, publish_type_model, publish_type_filter_model, bg_task_manager):
         """
         Model which represents the latest publishes for an entity
         """
         self._publish_type_model = publish_type_model
+        self._publish_type_filter_model = publish_type_filter_model
         self._folder_icon = QtGui.QIcon(QtGui.QPixmap(":/res/folder_512x400.png"))
         self._loading_icon = QtGui.QIcon(QtGui.QPixmap(":/res/loading_512x400.png"))
         self._associated_items = {}
@@ -308,6 +310,17 @@ class SgLatestPublishModel(ShotgunModel):
             type_id_aggregates[type_id] += 1
         self._publish_type_model.set_active_types(type_id_aggregates)
 
+        # aggregate by sg_publish_type for the filter model
+        sg_publish_type_aggregates = defaultdict(int)
+        for x in range(self.invisibleRootItem().rowCount()):
+            sg_publish_type_id = (
+                self.invisibleRootItem()
+                .child(x)
+                .data(SgLatestPublishModel.SG_PUBLISH_TYPE_ID_ROLE)
+            )
+            sg_publish_type_aggregates[sg_publish_type_id] += 1
+        self._publish_type_filter_model.set_active_types(sg_publish_type_aggregates)
+        
         # and now trigger a refresh
         self._refresh_data()
 
@@ -413,7 +426,13 @@ class SgLatestPublishModel(ShotgunModel):
             item.setData(None, SgLatestPublishModel.TYPE_ID_ROLE)
             item.setData("No Type", SgLatestPublishModel.PUBLISH_TYPE_NAME_ROLE)
 
-        # add name and version to search string
+        # store sg_publish_type ID as its own role
+        sg_publish_type = sg_data.get("sg_publish_type")
+        if sg_publish_type:
+            item.setData(sg_publish_type["id"], SgLatestPublishModel.SG_PUBLISH_TYPE_ID_ROLE)
+        else:
+            item.setData(None, SgLatestPublishModel.SG_PUBLISH_TYPE_ID_ROLE)
+
         if sg_data.get("name"):
             search_str += " %s" % sg_data["name"]
         if sg_data.get("version_number"):
@@ -496,6 +515,7 @@ class SgLatestPublishModel(ShotgunModel):
         if len(sg_data_list) == 0 and len(self._treeview_folder_items) == 0:
             # tell publish type setup that there is nothing to display
             self._publish_type_model.set_active_types({})
+            self._publish_type_filter_model.set_active_types({}) 
             return []
 
         # and process sg publish data
@@ -559,6 +579,8 @@ class SgLatestPublishModel(ShotgunModel):
         # Go ahead count types for the aggregate
         # and assemble filtered sg data set
         new_sg_data = []
+        sg_publish_type_aggregates = defaultdict(int)  
+
         for second_pass_data in unique_data.values():
 
             # get the shotgun data for this guy
@@ -581,8 +603,13 @@ class SgLatestPublishModel(ShotgunModel):
             type_id = second_pass_data["type_id"]
             type_id_aggregates[type_id] += 1
 
+            # count by sg_publish_type id
+            sg_pub_type = sg_item.get("sg_publish_type")
+            sg_publish_type_aggregates[sg_pub_type["id"] if sg_pub_type else None] += 1
+
         # tell the type model to reshuffle and reformat itself
         # based on the types contained in this search
         self._publish_type_model.set_active_types(type_id_aggregates)
+        self._publish_type_filter_model.set_active_types(sg_publish_type_aggregates)  
 
         return new_sg_data

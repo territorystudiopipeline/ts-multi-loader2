@@ -102,27 +102,75 @@ class Ui_Dialog(object):
         self.entity_preset_tabs.setUsesScrollButtons(True)
         self.entity_preset_tabs.setObjectName("entity_preset_tabs")
         self.left_area.addWidget(self.entity_preset_tabs)
-        self.label_4 = QtGui.QLabel(Dialog)
-        self.label_4.setAlignment(QtCore.Qt.AlignCenter)
-        self.label_4.setObjectName("label_4")
-        self.left_area.addWidget(self.label_4)
-        self.publish_type_list = QtGui.QListView(Dialog)
+        # Tab widget
+        self.filter_tabs = QtGui.QTabWidget(Dialog)
+        self.filter_tabs.setObjectName("filter_tabs")
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Maximum)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.publish_type_list.sizePolicy().hasHeightForWidth())
-        self.publish_type_list.setSizePolicy(sizePolicy)
+        self.filter_tabs.setSizePolicy(sizePolicy)
+
+        # First tab consists in published file type list 
+        self.publish_type_tab = QtGui.QWidget()
+        self.publish_type_tab.setObjectName("publish_type_tab")
+        self.publish_type_tab_layout = QtGui.QVBoxLayout(self.publish_type_tab)
+        self.publish_type_tab_layout.setContentsMargins(0, 0, 0, 0)
+        self.publish_type_tab_layout.setSpacing(0)
+        self.publish_type_tab_layout.setObjectName("publish_type_tab_layout")
+
+        self.publish_type_list = QtGui.QListView(self.publish_type_tab)
+        sizePolicy2 = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Maximum)
+        sizePolicy2.setHorizontalStretch(0)
+        sizePolicy2.setVerticalStretch(0)
+        sizePolicy2.setHeightForWidth(self.publish_type_list.sizePolicy().hasHeightForWidth())
+        self.publish_type_list.setSizePolicy(sizePolicy2)
         self.publish_type_list.setMinimumSize(QtCore.QSize(100, 100))
-        self.publish_type_list.setStyleSheet("QListView::item {\n"
-"    border-top: 1px dotted #888888;\n"
-"    padding: 5px;\n"
-" }")
+        self.publish_type_list.setStyleSheet(
+            "QListView::item {\n"
+            "    border-top: 1px dotted #888888;\n"
+            "    padding: 5px;\n"
+            " }"
+        )
         self.publish_type_list.setEditTriggers(QtGui.QAbstractItemView.NoEditTriggers)
         self.publish_type_list.setProperty("showDropIndicator", False)
         self.publish_type_list.setSelectionMode(QtGui.QAbstractItemView.NoSelection)
         self.publish_type_list.setUniformItemSizes(True)
         self.publish_type_list.setObjectName("publish_type_list")
-        self.left_area.addWidget(self.publish_type_list)
+        self.publish_type_tab_layout.addWidget(self.publish_type_list)
+
+        self.filter_tabs.addTab(self.publish_type_tab, "File Types")
+
+        # Second tab consists in publish type list 
+        self.publish_type_filter_tab = QtGui.QWidget()
+        self.publish_type_filter_tab.setObjectName("publish_type_filter_tab")
+        self.publish_type_filter_tab_layout = QtGui.QVBoxLayout(self.publish_type_filter_tab)
+        self.publish_type_filter_tab_layout.setContentsMargins(0, 0, 0, 0)
+        self.publish_type_filter_tab_layout.setSpacing(0)
+        self.publish_type_filter_tab_layout.setObjectName("publish_type_filter_tab_layout")
+
+        self.publish_type_filter_list = QtGui.QListView(self.publish_type_filter_tab)
+        sizePolicy3 = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Maximum)
+        sizePolicy3.setHorizontalStretch(0)
+        sizePolicy3.setVerticalStretch(0)
+        sizePolicy3.setHeightForWidth(self.publish_type_filter_list.sizePolicy().hasHeightForWidth())
+        self.publish_type_filter_list.setSizePolicy(sizePolicy3)
+        self.publish_type_filter_list.setMinimumSize(QtCore.QSize(100, 100))
+        self.publish_type_filter_list.setStyleSheet(
+            "QListView::item {\n"
+            "    border-top: 1px dotted #888888;\n"
+            "    padding: 5px;\n"
+            " }"
+        )
+        self.publish_type_filter_list.setEditTriggers(QtGui.QAbstractItemView.NoEditTriggers)
+        self.publish_type_filter_list.setProperty("showDropIndicator", False)
+        self.publish_type_filter_list.setSelectionMode(QtGui.QAbstractItemView.NoSelection)
+        self.publish_type_filter_list.setUniformItemSizes(True)
+        self.publish_type_filter_list.setObjectName("publish_type_filter_list")
+        self.publish_type_filter_tab_layout.addWidget(self.publish_type_filter_list)
+
+        self.filter_tabs.addTab(self.publish_type_filter_tab, "Publish Types")
+
+        self.left_area.addWidget(self.filter_tabs)
         self.horizontalLayout_6 = QtGui.QHBoxLayout()
         self.horizontalLayout_6.setSpacing(2)
         self.horizontalLayout_6.setObjectName("horizontalLayout_6")
@@ -369,7 +417,8 @@ class Ui_Dialog(object):
         self.navigation_next.setAccessibleName(QtGui.QApplication.translate("Dialog", "navigation_next", None, QtGui.QApplication.UnicodeUTF8))
         self.entity_preset_tabs.setToolTip(QtGui.QApplication.translate("Dialog", "This area shows <i>ShotGrid objects</i> such as Shots or Assets, grouped into sections. ", None, QtGui.QApplication.UnicodeUTF8))
         self.entity_preset_tabs.setAccessibleName(QtGui.QApplication.translate("Dialog", "entity_preset_tabs", None, QtGui.QApplication.UnicodeUTF8))
-        self.label_4.setText(QtGui.QApplication.translate("Dialog", "<small>Filter by Published File Type</small>", None, QtGui.QApplication.UnicodeUTF8))
+        self.publish_type_filter_list.setToolTip(QtGui.QApplication.translate("Dialog", "Filter publishes by publish type category. Tick and untick items to show or hide matching publishes.", None, QtGui.QApplication.UnicodeUTF8))
+        self.publish_type_filter_list.setAccessibleName(QtGui.QApplication.translate("Dialog", "publish_type_filter_list", None, QtGui.QApplication.UnicodeUTF8))
         self.publish_type_list.setToolTip(QtGui.QApplication.translate("Dialog", "This list shows all the relevant <i>publish types</i> for your current selection. By ticking and unticking items in this list, publishes in the main view will be shown or hidden. You can see a summary count next to each publish type, showing how many items of that sort are matching your current selection.", None, QtGui.QApplication.UnicodeUTF8))
         self.publish_type_list.setAccessibleName(QtGui.QApplication.translate("Dialog", "publish_type_list", None, QtGui.QApplication.UnicodeUTF8))
         self.check_all.setText(QtGui.QApplication.translate("Dialog", "Select All", None, QtGui.QApplication.UnicodeUTF8))
