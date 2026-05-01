@@ -24,6 +24,14 @@ class SgLatestPublishProxyModel(QtGui.QSortFilterProxyModel):
     Filter model to be used in conjunction with SgLatestPublishModel
     """
 
+    # sort mode constants
+    SORT_DATE_LATEST = 0
+    SORT_DATE_OLDEST = 1
+    SORT_NAME_AZ = 2
+    SORT_NAME_ZA = 3
+    SORT_VERSION_HIGH = 4
+    SORT_VERSION_LOW = 5
+
     # signal which is emitted whenever a filter changes
     filter_changed = QtCore.Signal()
 
@@ -33,6 +41,15 @@ class SgLatestPublishProxyModel(QtGui.QSortFilterProxyModel):
         self._show_folders = True
         self._search_filter = ""
         self._valid_sg_publish_type_ids = None
+        self._sort_mode = self.SORT_DATE_LATEST
+
+    def set_sort_mode(self, mode):
+        """
+        Set the sort mode and resort the view.
+        """
+        self._sort_mode = mode
+        self.invalidate()
+        self.filter_changed.emit()
 
     def set_search_query(self, search_filter):
         """
@@ -62,6 +79,52 @@ class SgLatestPublishProxyModel(QtGui.QSortFilterProxyModel):
         self.invalidateFilter()
         self.filter_changed.emit()
     
+    def lessThan(self, left_idx, right_idx):
+        """
+        Drives the sort order.
+        """
+        model = self.sourceModel()
+        left_item = model.invisibleRootItem().child(left_idx.row())
+        right_item = model.invisibleRootItem().child(right_idx.row())
+
+        if left_item is None or right_item is None:
+            return False
+
+        # folders always sort above publishes
+        left_is_folder  = left_item.data(SgLatestPublishModel.IS_FOLDER_ROLE)
+        right_is_folder = right_item.data(SgLatestPublishModel.IS_FOLDER_ROLE)
+
+        if left_is_folder and not right_is_folder:
+            return True
+        if not left_is_folder and right_is_folder:
+            return False
+
+        left_sg  = shotgun_model.get_sg_data(left_idx)
+        right_sg = shotgun_model.get_sg_data(right_idx)
+
+        if left_sg is None or right_sg is None:
+            return False
+
+        if self._sort_mode == self.SORT_DATE_LATEST:
+            return (left_sg.get("created_at") or 0) > (right_sg.get("created_at") or 0)
+
+        elif self._sort_mode == self.SORT_DATE_OLDEST:
+            return (left_sg.get("created_at") or 0) < (right_sg.get("created_at") or 0)
+
+        elif self._sort_mode == self.SORT_NAME_AZ:
+            return (left_sg.get("name") or "").lower() < (right_sg.get("name") or "").lower()
+
+        elif self._sort_mode == self.SORT_NAME_ZA:
+            return (left_sg.get("name") or "").lower() > (right_sg.get("name") or "").lower()
+
+        elif self._sort_mode == self.SORT_VERSION_HIGH:
+            return (left_sg.get("version_number") or 0) > (right_sg.get("version_number") or 0)
+
+        elif self._sort_mode == self.SORT_VERSION_LOW:
+            return (left_sg.get("version_number") or 0) < (right_sg.get("version_number") or 0)
+
+        return False
+
     def filterAcceptsRow(self, source_row, source_parent_idx):
         """
         Overridden from base class.

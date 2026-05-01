@@ -225,6 +225,16 @@ class AppDialog(QtGui.QWidget):
         self._publish_proxy_model = SgLatestPublishProxyModel(self)
         self._publish_proxy_model.setSourceModel(self._publish_model)
 
+        self._publish_proxy_model.setDynamicSortFilter(True)
+        self._publish_proxy_model.sort(0, QtCore.Qt.AscendingOrder)
+
+        # restore saved sort preference
+        saved_sort = self._settings_manager.retrieve("publish_sort_mode", 0)
+        self.ui.sort_by.setCurrentIndex(saved_sort)
+        self._publish_proxy_model.set_sort_mode(saved_sort)
+
+        self.ui.sort_by.currentIndexChanged.connect(self._on_sort_mode_changed)
+        
         # whenever the number of columns change in the proxy model
         # check if we should display the "sorry, no publishes found" overlay
         self._publish_model.cache_loaded.connect(self._on_publish_content_change)
@@ -360,6 +370,13 @@ class AppDialog(QtGui.QWidget):
         # trigger an initial evaluation of filter proxy model
         self._apply_type_filters_on_publishes()
 
+    def _on_sort_mode_changed(self, index):
+        """
+        Change the sort mode for the publish proxy model.
+        """
+        self._publish_proxy_model.set_sort_mode(index)
+        self._settings_manager.store("publish_sort_mode", index)
+        
     def _show_publish_actions(self, pos):
         """
         Shows the actions for the current publish selection.
