@@ -280,6 +280,10 @@ class Ui_Dialog(object):
         self.show_sub_items = QtGui.QCheckBox(Dialog)
         self.show_sub_items.setObjectName("show_sub_items")
         self.horizontalLayout_4.addWidget(self.show_sub_items)
+        self.multi_load_btn = QtGui.QPushButton(Dialog)
+        self.multi_load_btn.setMinimumSize(QtCore.QSize(140, 26))
+        self.multi_load_btn.setObjectName("multi_load_btn")
+        self.horizontalLayout_4.addWidget(self.multi_load_btn)
         spacerItem1a = QtGui.QSpacerItem(12, 20, QtGui.QSizePolicy.Fixed, QtGui.QSizePolicy.Minimum)
         self.horizontalLayout_4.addItem(spacerItem1a)
         # sort label
@@ -435,6 +439,7 @@ class Ui_Dialog(object):
         self.entity_preset_tabs.setToolTip(QtGui.QApplication.translate("Dialog", "This area shows <i>ShotGrid objects</i> such as Shots or Assets, grouped into sections. ", None, QtGui.QApplication.UnicodeUTF8))
         self.entity_preset_tabs.setAccessibleName(QtGui.QApplication.translate("Dialog", "entity_preset_tabs", None, QtGui.QApplication.UnicodeUTF8))
         self.sort_label.setText(QtGui.QApplication.translate("Dialog", "Sort:", None, QtGui.QApplication.UnicodeUTF8))
+        self.multi_load_btn.setText(QtGui.QApplication.translate("Dialog", "Multi Load", None, QtGui.QApplication.UnicodeUTF8))
         self.publish_type_filter_list.setToolTip(QtGui.QApplication.translate("Dialog", "Filter publishes by publish type category. Tick and untick items to show or hide matching publishes.", None, QtGui.QApplication.UnicodeUTF8))
         self.publish_type_filter_list.setAccessibleName(QtGui.QApplication.translate("Dialog", "publish_type_filter_list", None, QtGui.QApplication.UnicodeUTF8))
         self.publish_type_list.setToolTip(QtGui.QApplication.translate("Dialog", "This list shows all the relevant <i>publish types</i> for your current selection. By ticking and unticking items in this list, publishes in the main view will be shown or hidden. You can see a summary count next to each publish type, showing how many items of that sort are matching your current selection.", None, QtGui.QApplication.UnicodeUTF8))
