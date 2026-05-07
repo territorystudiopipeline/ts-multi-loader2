@@ -17,6 +17,7 @@ from .model_hierarchy import SgHierarchyModel
 from .model_entity import SgEntityModel
 from .model_latestpublish import SgLatestPublishModel
 from .model_publishtype import SgPublishTypeModel
+from .model_publish_type_filter import SgPublishTypeFilterModel
 from .model_status import SgStatusModel
 from .proxymodel_latestpublish import SgLatestPublishProxyModel
 from .proxymodel_entity import SgEntityProxyModel
@@ -200,19 +201,42 @@ class AppDialog(QtGui.QWidget):
         )
 
         #################################################
+        # load and initialize ts publish type filter model 
+        self._publish_type_filter_model = SgPublishTypeFilterModel(
+            self, self._settings_manager, self._task_manager
+        )
+        self.ui.publish_type_filter_list.setModel(self._publish_type_filter_model)
+
+        self._publish_type_filter_overlay = ShotgunModelOverlayWidget(
+            self._publish_type_filter_model, self.ui.publish_type_filter_list
+        )
+        
+        #################################################
         # setup publish model
         self._publish_model = SgLatestPublishModel(
-            self, self._publish_type_model, self._task_manager
+            self, self._publish_type_model, self._publish_type_filter_model, self._task_manager
         )
 
         self._publish_main_overlay = ShotgunModelOverlayWidget(
             self._publish_model, self.ui.publish_view
         )
 
+        self.ui.multi_load_btn.clicked.connect(self._on_multi_load)
+        
         # set up a proxy model to cull results based on type selection
         self._publish_proxy_model = SgLatestPublishProxyModel(self)
         self._publish_proxy_model.setSourceModel(self._publish_model)
 
+        self._publish_proxy_model.setDynamicSortFilter(True)
+        self._publish_proxy_model.sort(0, QtCore.Qt.AscendingOrder)
+
+        # restore saved sort preference
+        saved_sort = self._settings_manager.retrieve("publish_sort_mode", 0)
+        self.ui.sort_by.setCurrentIndex(saved_sort)
+        self._publish_proxy_model.set_sort_mode(saved_sort)
+
+        self.ui.sort_by.currentIndexChanged.connect(self._on_sort_mode_changed)
+        
         # whenever the number of columns change in the proxy model
         # check if we should display the "sorry, no publishes found" overlay
         self._publish_model.cache_loaded.connect(self._on_publish_content_change)
@@ -244,6 +268,10 @@ class AppDialog(QtGui.QWidget):
             self._apply_type_filters_on_publishes
         )
 
+        self._publish_type_filter_model.itemChanged.connect(
+            self._apply_type_filters_on_publishes
+        )
+        
         # if an item in the table is double clicked the default action is run
         self.ui.publish_view.doubleClicked.connect(self._on_publish_double_clicked)
 
@@ -290,6 +318,9 @@ class AppDialog(QtGui.QWidget):
 
         self.ui.check_all.clicked.connect(self._publish_type_model.select_all)
         self.ui.check_none.clicked.connect(self._publish_type_model.select_none)
+
+        self.ui.check_all.clicked.connect(self._publish_type_filter_model.select_all)
+        self.ui.check_none.clicked.connect(self._publish_type_filter_model.select_none)
 
         #################################################
         # thumb scaling
@@ -341,6 +372,404 @@ class AppDialog(QtGui.QWidget):
         # trigger an initial evaluation of filter proxy model
         self._apply_type_filters_on_publishes()
 
+    def _on_multi_load(self):
+        app = sgtk.platform.current_bundle()
+
+        selected_item = self._get_selected_entity()
+        if selected_item is None:
+            QtGui.QMessageBox.warning(
+                self, "No Selection",
+                "Please select an entity in the left panel first."
+            )
+            return
+
+        (sg_data, field_value) = model_item_data.get_item_data(selected_item)
+        entity_data = sg_data or field_value
+
+        SUPPORTED_TYPES = ("Shot", "Asset", "Sequence", "CustomEntity04")
+        if not isinstance(entity_data, dict) or entity_data.get("type") not in SUPPORTED_TYPES:
+            QtGui.QMessageBox.warning(
+                self, "Invalid Selection",
+                "Please select a Shot, Asset, Sequence or Master Asset."
+            )
+            return
+
+        entity_type = entity_data["type"]
+        entity_id = entity_data["id"]
+        entity_name = entity_data.get("name") or entity_data.get("code", entity_type)
+
+        DIRECT = "direct"
+        CHILDREN = "children"
+        LINKED = "linked"
+
+        CHILDREN_CONFIG = {
+            "Sequence": ("Shot", "sg_sequence"),
+            "CustomEntity04": ("Asset", "sg_asset_group"),
+        }
+
+        INBOUND_LINK_CONFIG = {
+            "Shot": [
+                ("Shot", "sg_linked_shots", "Shots that link to this shot"),
+                ("Asset", "sg_linked_shots", "Assets that link to this shot"),
+                ("Sequence", "sg_linked_shots", "Sequences that link to this shot"),
+                ("CustomEntity04", "sg_linked_shots", "Master Assets that link to this shot"),
+            ],
+            "Asset": [
+                ("Shot", "sg_linked_assets", "Shots that link to this asset"),
+                ("Asset", "sg_linked_assets", "Assets that link to this asset"),
+                ("Sequence", "sg_linked_assets", "Sequences that link to this asset"),
+                ("CustomEntity04", "sg_linked_assets", "Master Assets that link to this asset"),
+            ],
+            "Sequence": [
+                ("Shot", "sg_linked_sequences", "Shots that link to this sequence"),
+                ("Asset", "sg_linked_sequences", "Assets that link to this sequence"),
+                ("Sequence", "sg_linked_sequences", "Sequences that link to this sequence"),
+                ("CustomEntity04", "sg_linked_sequences", "Master Assets that link to this sequence"),
+            ],
+            "CustomEntity04": [
+                ("Shot", "sg_linked_master_assets", "Shots that link to this master asset"),
+                ("Asset", "sg_linked_master_assets", "Assets that link to this master asset"),
+                ("Sequence", "sg_linked_master_assets", "Sequences that link to this master asset"),
+                ("CustomEntity04", "sg_linked_master_assets", "Master Assets that link to this master asset"),
+            ],
+        }
+
+        inbound_links = INBOUND_LINK_CONFIG.get(entity_type, [])
+
+        type_items = []
+        for idx in range(self._publish_type_filter_model.rowCount()):
+            item = self._publish_type_filter_model.item(idx)
+            if item.text() == self._publish_type_filter_model.FOLDERS_ITEM_TEXT:
+                continue
+            sg_item_data = shotgun_model.get_sg_data(item)
+            if sg_item_data:
+                type_items.append((sg_item_data["code"], sg_item_data["id"]))
+
+        if not type_items:
+            QtGui.QMessageBox.warning(
+                self, "No Types Available",
+                "No publish types were found in the filter list."
+            )
+            return
+
+        # Dialog
+        dialog = QtGui.QDialog(self)
+        dialog.setWindowTitle("Multi Load")
+        dialog.setMinimumWidth(460)
+        layout = QtGui.QVBoxLayout(dialog)
+
+        info_label = QtGui.QLabel("<b>Selected:</b> [%s] %s" % (entity_type, entity_name))
+        info_label.setWordWrap(True)
+        layout.addWidget(info_label)
+
+        line = QtGui.QFrame()
+        line.setFrameShape(QtGui.QFrame.HLine)
+        line.setFrameShadow(QtGui.QFrame.Sunken)
+        layout.addWidget(line)
+
+        group = QtGui.QGroupBox("Load:")
+        group_layout = QtGui.QVBoxLayout(group)
+
+        chk_direct = QtGui.QCheckBox("Direct publishes of the %s" % entity_type)
+        chk_direct.setChecked(True)
+        group_layout.addWidget(chk_direct)
+
+        chk_children = QtGui.QCheckBox()
+        if entity_type in CHILDREN_CONFIG:
+            child_type, _ = CHILDREN_CONFIG[entity_type]
+            chk_children.setText("All %ss under this %s" % (child_type, entity_type))
+        else:
+            chk_children.setText("Child entities (not available for %s)" % entity_type)
+            chk_children.setEnabled(False)
+        group_layout.addWidget(chk_children)
+
+        chk_linked = QtGui.QCheckBox(
+            "Entities that link to this %s" % entity_type if inbound_links
+            else "Linked entities (not available for %s)" % entity_type
+        )
+        chk_linked.setEnabled(bool(inbound_links))
+        group_layout.addWidget(chk_linked)
+
+        layout.addWidget(group)
+
+        # Link checkboxes
+        link_group = QtGui.QGroupBox("Associated linked entities to load:")
+        link_layout = QtGui.QVBoxLayout(link_group)
+
+        link_checkboxes = []  
+        for (src_type, field_name, label) in inbound_links:
+            chk = QtGui.QCheckBox(label)
+            chk.setChecked(True)
+            link_layout.addWidget(chk)
+            link_checkboxes.append((chk, src_type, field_name))
+
+        layout.addWidget(link_group)
+        link_group.setEnabled(False)
+
+        chk_linked.toggled.connect(link_group.setEnabled)
+
+        layout.addSpacing(6)
+
+        layout.addWidget(QtGui.QLabel("Publish Type to load:"))
+
+        type_combo = QtGui.QComboBox(dialog)
+        for (name, type_id) in type_items:
+            type_combo.addItem(name, type_id)
+        layout.addWidget(type_combo)
+
+        layout.addSpacing(6)
+
+        rendered_only_chk = QtGui.QCheckBox("Rendered Images only")
+        rendered_only_chk.setChecked(True)
+        rendered_only_chk.setToolTip("Only publishes whose Published File Type is 'Rendered Image' will be loaded.")
+        layout.addWidget(rendered_only_chk)
+
+        layout.addSpacing(12)
+
+        btn_layout = QtGui.QHBoxLayout()
+        ok_btn = QtGui.QPushButton("Load")
+        cancel_btn = QtGui.QPushButton("Cancel")
+        btn_layout.addStretch()
+        btn_layout.addWidget(ok_btn)
+        btn_layout.addWidget(cancel_btn)
+        layout.addLayout(btn_layout)
+
+        ok_btn.clicked.connect(dialog.accept)
+        cancel_btn.clicked.connect(dialog.reject)
+
+        if dialog.exec_() != QtGui.QDialog.Accepted:
+            return
+
+        load_methods = set()
+        if chk_direct.isChecked():
+            load_methods.add(DIRECT)
+        if chk_children.isChecked() and chk_children.isEnabled():
+            load_methods.add(CHILDREN)
+        if chk_linked.isChecked() and chk_linked.isEnabled():
+            load_methods.add(LINKED)
+
+        if not load_methods:
+            QtGui.QMessageBox.warning(
+                self, "No Load Method Selected",
+                "Please select at least one loading method."
+            )
+            return
+
+        selected_link_fields = [
+            (src_type, field_name)
+            for (chk, src_type, field_name) in link_checkboxes
+            if chk.isChecked()
+        ]
+
+        selected_type_name = type_combo.currentText()
+        selected_type_id = type_combo.itemData(type_combo.currentIndex())
+        rendered_only = rendered_only_chk.isChecked()
+
+        rendered_type = None
+        if rendered_only:
+            rendered_type = app.shotgun.find_one(
+                "PublishedFileType",
+                [["code", "is", "Rendered Image"]],
+                ["id", "code"]
+            )
+            if rendered_type is None:
+                app.log_warning("Could not find PublishedFileType 'Rendered Image', skipping that filter.")
+
+        publish_entity_type = sgtk.util.get_published_file_entity_type(app.tank)
+
+        all_entity_filters = []
+
+        if DIRECT in load_methods:
+            all_entity_filters.append(
+                ["entity", "is", {"type": entity_type, "id": entity_id}]
+            )
+
+        if CHILDREN in load_methods:
+            child_entity_type, child_link_field = CHILDREN_CONFIG[entity_type]
+            all_entity_filters.append([
+                "entity.%s.%s" % (child_entity_type, child_link_field),
+                "is",
+                {"type": entity_type, "id": entity_id},
+            ])
+
+        if LINKED in load_methods:
+            if not selected_link_fields:
+                QtGui.QMessageBox.warning(
+                    self, "No Link Fields Selected",
+                    "Please select at least one linked entity type to search."
+                )
+                return
+
+            all_source_entities = []
+
+            for (src_type, field_name) in selected_link_fields:
+                app.log_debug(
+                    "Load linked: searching %s where %s contains [%s] %s"
+                    % (src_type, field_name, entity_type, entity_name)
+                )
+
+                matches = app.shotgun.find(
+                    src_type,
+                    [[field_name, "in", [{"type": entity_type, "id": entity_id}]]],
+                    ["id", "name", "code"] if src_type == "Sequence" else ["id", "name"]
+                )
+
+                app.log_debug(
+                    "Load linked: found %d %s(s) with %s linking to %s '%s'"
+                    % (len(matches), src_type, field_name, entity_type, entity_name)
+                )
+
+                if src_type in CHILDREN_CONFIG:
+                    child_type, child_field = CHILDREN_CONFIG[src_type]
+                    for match in matches:
+                        children = app.shotgun.find(
+                            child_type,
+                            [[child_field, "is", {"type": src_type, "id": match["id"]}]],
+                            ["id", "name"]
+                        )
+                        app.log_debug(
+                            "Load linked: expanded %s %s → %d %s(s)"
+                            % (src_type, match.get("id"), len(children), child_type)
+                        )
+                        all_source_entities.extend(
+                            {"type": child_type, "id": c["id"]} for c in children
+                        )
+                else:
+                    all_source_entities.extend(
+                        {"type": src_type, "id": m["id"]} for m in matches
+                    )
+
+            if not all_source_entities:
+                QtGui.QMessageBox.information(
+                    self, "Nothing Found",
+                    "No entities were found that link to %s '%s' "
+                    "via the selected fields." % (entity_type, entity_name)
+                )
+                return
+
+            seen = {(e["type"], e["id"]): e for e in all_source_entities}
+            all_source_entities = list(seen.values())
+
+            app.log_debug(
+                "Load linked: %d unique source entities to query publishes for"
+                % len(all_source_entities)
+            )
+
+            all_entity_filters.append(["entity", "in", all_source_entities])
+
+        if len(all_entity_filters) == 1:
+            entity_filter = all_entity_filters[0]
+        else:
+            entity_filter = {
+                "filter_operator": "any",
+                "filters": all_entity_filters,
+            }
+
+        filters = [
+            entity_filter,
+            ["sg_publish_type", "is", {"type": "CustomNonProjectEntity06", "id": selected_type_id}],
+        ]
+
+        if rendered_type:
+            filters.append(
+                ["published_file_type", "is", {"type": "PublishedFileType", "id": rendered_type["id"]}]
+            )
+
+        filters.extend(app.get_setting("publish_filters", []))
+
+        summary_fields = [
+            {"field": "version_number", "type": "maximum"},
+            {"field": "id", "type": "maximum"},  
+        ]
+
+        grouping = [{
+            "field": "sg_publish_group",  
+            "direction": "asc",
+            "type": "exact",
+        }]
+
+        results = app.shotgun.summarize(
+            publish_entity_type,
+            filters,
+            summary_fields=summary_fields,
+            grouping=grouping,
+        )
+
+        if not results.get("groups"):
+            QtGui.QMessageBox.information(
+                self, "No Publishes Found",
+                "No '%s' publishes found for the selected%s."
+                % (selected_type_name, " (Rendered Image only)" if rendered_only else "")
+            )
+            return
+
+        latest_by_group = {
+            group["group_name"]: {
+                "version": int(group["summaries"]["version_number"]),
+                "id": int(group["summaries"]["id"]),
+            }
+            for group in results["groups"]
+            if group.get("group_name")
+        }
+
+        latest_ids = [v["id"] for v in latest_by_group.values()]
+
+        fields = [
+            "name", "version_number", "entity", "task",
+            "path", "published_file_type", "sg_publish_type", "created_at",
+        ]
+
+        latest_publishes = app.shotgun.find(
+            publish_entity_type,
+            [["id", "in", latest_ids]],
+            fields,
+        )
+
+        if not latest_publishes:
+            QtGui.QMessageBox.information(
+                self, "No Publishes Found",
+                "No '%s' publishes found for the selected criteria%s."
+                % (selected_type_name, " (Rendered Image only)" if rendered_only else "")
+            )
+            return
+
+        app.log_debug(
+            "Bulk Load: running default action on %d '%s' publishes (load_methods=%s)"
+            % (len(latest_publishes), selected_type_name, sorted(load_methods))
+        )
+
+        failed = []
+        for sg_item in latest_publishes:
+            try:
+                action = self._action_manager.get_default_action_for_publish(
+                    sg_item, self._action_manager.UI_AREA_MAIN
+                )
+                if action:
+                    action.trigger()
+                else:
+                    app.log_warning(
+                        "No default action for: %s v%04d"
+                        % (sg_item.get("name"), sg_item.get("version_number") or 0)
+                    )
+                    failed.append(sg_item.get("name"))
+            except Exception:
+                app.log_exception("Error loading: %s" % sg_item.get("name"))
+                failed.append(sg_item.get("name"))
+
+        if failed:
+            QtGui.QMessageBox.warning(
+                self, "Load Completed With Errors",
+                "The following publishes could not be loaded:\n\n%s"
+                % "\n".join(failed)
+            )
+            
+    def _on_sort_mode_changed(self, index):
+        """
+        Change the sort mode for the publish proxy model.
+        """
+        self._publish_proxy_model.set_sort_mode(index)
+        self._settings_manager.store("publish_sort_mode", index)
+        
     def _show_publish_actions(self, pos):
         """
         Shows the actions for the current publish selection.
@@ -968,6 +1397,13 @@ class AppDialog(QtGui.QWidget):
         show_folders = self._publish_type_model.get_show_folders()
         self._publish_proxy_model.set_filter_by_type_ids(sg_type_ids, show_folders)
 
+        # ts publish type filter 
+        custom_type_ids = self._publish_type_filter_model.get_selected_types()
+        all_count = self._publish_type_filter_model.rowCount() - 1  
+        if len(custom_type_ids) == all_count:
+            self._publish_proxy_model.set_filter_by_sg_publish_type_ids(None)
+        else:
+            self._publish_proxy_model.set_filter_by_sg_publish_type_ids(custom_type_ids)
     ########################################################################################
     # publish view
 
@@ -1134,6 +1570,7 @@ class AppDialog(QtGui.QWidget):
         self._status_model.hard_refresh()
         self._publish_history_model.hard_refresh()
         self._publish_type_model.hard_refresh()
+        self._publish_type_filter_model.hard_refresh()  
         self._publish_model.hard_refresh()
         for p in self._entity_presets:
             self._entity_presets[p].model.hard_refresh()

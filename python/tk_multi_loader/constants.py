@@ -33,6 +33,7 @@ PUBLISHED_FILES_FIELDS = [
     "version.Version.sg_status_list",
     "created_by.HumanUser.image",
     "sg_publish_group",
+    "sg_publish_type",
 ]
 
 # left hand side tree view search only kicks in
