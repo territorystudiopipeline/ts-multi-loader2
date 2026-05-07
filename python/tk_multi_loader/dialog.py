@@ -660,33 +660,61 @@ class AppDialog(QtGui.QWidget):
 
         filters.extend(app.get_setting("publish_filters", []))
 
+        summary_fields = [
+            {"field": "version_number", "type": "maximum"},
+            {"field": "id", "type": "maximum"},  
+        ]
+
+        grouping = [{
+            "field": "sg_publish_group",  
+            "direction": "asc",
+            "type": "exact",
+        }]
+
+        results = app.shotgun.summarize(
+            publish_entity_type,
+            filters,
+            summary_fields=summary_fields,
+            grouping=grouping,
+        )
+
+        if not results.get("groups"):
+            QtGui.QMessageBox.information(
+                self, "No Publishes Found",
+                "No '%s' publishes found for the selected%s."
+                % (selected_type_name, " (Rendered Image only)" if rendered_only else "")
+            )
+            return
+
+        latest_by_group = {
+            group["group_name"]: {
+                "version": int(group["summaries"]["version_number"]),
+                "id": int(group["summaries"]["id"]),
+            }
+            for group in results["groups"]
+            if group.get("group_name")
+        }
+
+        latest_ids = [v["id"] for v in latest_by_group.values()]
+
         fields = [
             "name", "version_number", "entity", "task",
             "path", "published_file_type", "sg_publish_type", "created_at",
         ]
 
-        all_publishes = app.shotgun.find(
-            publish_entity_type, filters, fields,
-            order=[{"field_name": "created_at", "direction": "asc"}]
+        latest_publishes = app.shotgun.find(
+            publish_entity_type,
+            [["id", "in", latest_ids]],
+            fields,
         )
 
-        if not all_publishes:
+        if not latest_publishes:
             QtGui.QMessageBox.information(
                 self, "No Publishes Found",
                 "No '%s' publishes found for the selected criteria%s."
                 % (selected_type_name, " (Rendered Image only)" if rendered_only else "")
             )
             return
-
-        unique = {
-            (
-                pub["entity"]["id"] if pub.get("entity") else None,
-                pub["name"],
-                pub["task"]["id"] if pub.get("task") else None,
-            ): pub
-            for pub in all_publishes
-        }
-        latest_publishes = list(unique.values())
 
         app.log_debug(
             "Bulk Load: running default action on %d '%s' publishes (load_method=%s)"
