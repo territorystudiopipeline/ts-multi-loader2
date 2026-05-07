@@ -470,25 +470,25 @@ class AppDialog(QtGui.QWidget):
         group = QtGui.QGroupBox("Load:")
         group_layout = QtGui.QVBoxLayout(group)
 
-        radio_direct = QtGui.QRadioButton("Direct publishes of the %s" % entity_type)
-        radio_direct.setChecked(True)
-        group_layout.addWidget(radio_direct)
+        chk_direct = QtGui.QCheckBox("Direct publishes of the %s" % entity_type)
+        chk_direct.setChecked(True)
+        group_layout.addWidget(chk_direct)
 
-        radio_children = QtGui.QRadioButton()
+        chk_children = QtGui.QCheckBox()
         if entity_type in CHILDREN_CONFIG:
             child_type, _ = CHILDREN_CONFIG[entity_type]
-            radio_children.setText("All %ss under this %s" % (child_type, entity_type))
+            chk_children.setText("All %ss under this %s" % (child_type, entity_type))
         else:
-            radio_children.setText("Child entities (not available for %s)" % entity_type)
-            radio_children.setEnabled(False)
-        group_layout.addWidget(radio_children)
+            chk_children.setText("Child entities (not available for %s)" % entity_type)
+            chk_children.setEnabled(False)
+        group_layout.addWidget(chk_children)
 
-        radio_linked = QtGui.QRadioButton(
+        chk_linked = QtGui.QCheckBox(
             "Entities that link to this %s" % entity_type if inbound_links
             else "Linked entities (not available for %s)" % entity_type
         )
-        radio_linked.setEnabled(bool(inbound_links))
-        group_layout.addWidget(radio_linked)
+        chk_linked.setEnabled(bool(inbound_links))
+        group_layout.addWidget(chk_linked)
 
         layout.addWidget(group)
 
@@ -506,8 +506,7 @@ class AppDialog(QtGui.QWidget):
         layout.addWidget(link_group)
         link_group.setEnabled(False)
 
-        for radio in (radio_direct, radio_children, radio_linked):
-            radio.toggled.connect(lambda _: link_group.setEnabled(radio_linked.isChecked()))
+        chk_linked.toggled.connect(link_group.setEnabled)
 
         layout.addSpacing(6)
 
@@ -541,12 +540,20 @@ class AppDialog(QtGui.QWidget):
         if dialog.exec_() != QtGui.QDialog.Accepted:
             return
 
-        if radio_children.isChecked():
-            load_method = CHILDREN
-        elif radio_linked.isChecked():
-            load_method = LINKED
-        else:
-            load_method = DIRECT
+        load_methods = set()
+        if chk_direct.isChecked():
+            load_methods.add(DIRECT)
+        if chk_children.isChecked() and chk_children.isEnabled():
+            load_methods.add(CHILDREN)
+        if chk_linked.isChecked() and chk_linked.isEnabled():
+            load_methods.add(LINKED)
+
+        if not load_methods:
+            QtGui.QMessageBox.warning(
+                self, "No Load Method Selected",
+                "Please select at least one loading method."
+            )
+            return
 
         selected_link_fields = [
             (src_type, field_name)
@@ -570,20 +577,22 @@ class AppDialog(QtGui.QWidget):
 
         publish_entity_type = sgtk.util.get_published_file_entity_type(app.tank)
 
-        entity_filter = None
+        all_entity_filters = []
 
-        if load_method == DIRECT:
-            entity_filter = ["entity", "is", {"type": entity_type, "id": entity_id}]
+        if DIRECT in load_methods:
+            all_entity_filters.append(
+                ["entity", "is", {"type": entity_type, "id": entity_id}]
+            )
 
-        elif load_method == CHILDREN:
+        if CHILDREN in load_methods:
             child_entity_type, child_link_field = CHILDREN_CONFIG[entity_type]
-            entity_filter = [
+            all_entity_filters.append([
                 "entity.%s.%s" % (child_entity_type, child_link_field),
                 "is",
                 {"type": entity_type, "id": entity_id},
-            ]
+            ])
 
-        elif load_method == LINKED:
+        if LINKED in load_methods:
             if not selected_link_fields:
                 QtGui.QMessageBox.warning(
                     self, "No Link Fields Selected",
@@ -646,7 +655,15 @@ class AppDialog(QtGui.QWidget):
                 % len(all_source_entities)
             )
 
-            entity_filter = ["entity", "in", all_source_entities]
+            all_entity_filters.append(["entity", "in", all_source_entities])
+
+        if len(all_entity_filters) == 1:
+            entity_filter = all_entity_filters[0]
+        else:
+            entity_filter = {
+                "filter_operator": "any",
+                "filters": all_entity_filters,
+            }
 
         filters = [
             entity_filter,
@@ -717,8 +734,8 @@ class AppDialog(QtGui.QWidget):
             return
 
         app.log_debug(
-            "Bulk Load: running default action on %d '%s' publishes (load_method=%s)"
-            % (len(latest_publishes), selected_type_name, load_method)
+            "Bulk Load: running default action on %d '%s' publishes (load_methods=%s)"
+            % (len(latest_publishes), selected_type_name, sorted(load_methods))
         )
 
         failed = []
